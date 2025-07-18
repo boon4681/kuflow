@@ -44,3 +44,11 @@
     stroke: #ccc;
     stroke-dasharray: 2, 2;
 }
+
+.kuflow {
+    --background: 210 20% 97%;
+}
+
+.kuflow .node {
+    @apply shadow-md;
+}

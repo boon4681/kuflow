@@ -8,7 +8,8 @@ import { Edge } from './renderable/edge';
 import "./cyclic"
 import { detectCycles, mapLinks } from './cyclic';
 export interface KuflowConfig {
-    parent: HTMLDivElement
+    parent: HTMLDivElement,
+    disablePatternBackground?: boolean
 }
 
 export class Kuflow {
@@ -32,7 +33,10 @@ export class Kuflow {
 
     renderingPool: Renderable<any>[] = []
     pool: Renderable<any>[] = []
-    private nodes: NodeBasic[] = []
+    nodes: Set<NodeBasic> = new Set()
+    focusedNode: NodeBasic | null = null
+    x: number = 0
+    y: number = 0
     private nodePortTrackingTable: Map<Node, NodePort> = new Map()
     private registerRenderableTable: Map<string, Renderable<any>> = new Map()
     private linkPortInputToOutputTable: Map<string, { outputPortId: string, edge: Edge }> = new Map()
@@ -87,7 +91,9 @@ export class Kuflow {
         // setup misc
         const rect = this.parent.getBoundingClientRect()
         this.setCanvasSize(rect.width, rect.height)
-        this.setupGridPattern()
+        if (!config.disablePatternBackground) {
+            this.setupGridPattern()
+        }
 
         this.parentSizeObserver = new ResizeObserver(() => {
             const rect = this.parent.getBoundingClientRect()
@@ -124,6 +130,10 @@ export class Kuflow {
         this.canvas.on("mousemove", (event) => {
             this.fire("port.mousemove", event)
         })
+        this.canvas.on("mousedown", () => {
+            this.focusedNode?.mark()
+            this.focusedNode = null
+        })
         this.canvas.on("mouseup", (event) => {
             this.fire("port.mouseup", event)
         })
@@ -138,13 +148,11 @@ export class Kuflow {
 
     public readonly add = (obj: NodeBasic) => {
         this._addRenderable(obj)
-        this.nodes.push(obj)
         return obj
     }
 
     public readonly remove = (obj: NodeBasic) => {
         obj.remove()
-        this.nodes = this.nodes.filter(a => a.id != obj.id)
     }
 
     protected readonly _addRenderable = <V extends D3Any, T extends Renderable<V>>(obj: T) => {
@@ -162,6 +170,7 @@ export class Kuflow {
 
         let source = this.registerRenderableTable.get(sourcePortId)
         let target = this.registerRenderableTable.get(targetPortId)
+        console.log(source, target, source instanceof NodePort, target instanceof NodePort)
         if (!source) throw new Error("SourcePort not found or not mounted")
         if (!target) throw new Error("TargetPort not found or not mounted")
         if (!(source instanceof NodePort)) throw new Error("Source is not a port")
@@ -169,7 +178,7 @@ export class Kuflow {
         if (source.type == target.type) throw new Error("Source and Target port must be difference type.");
         if (source.nodeId == target.nodeId) throw new Error("Node cannot be connecting to it-self.")
         let [sourcePort, targetPort] = source.type == "output" ? [source, target] : [target, source]
-        if (!target.dataType.includes(source.dataType[0])) throw new Error(`Incorrect input. expected ${target.dataType} but receive ${source.dataType}`)
+        if (!targetPort.dataType.includes(sourcePort.dataType[0])) throw new Error(`Incorrect input. expected ${targetPort.dataType} but receive ${sourcePort.dataType}`)
 
         if (this.linkPortInputToOutputTable.get(targetPort.id)) throw new Error(`This input port id ${JSON.stringify(targetPort.id)} already connect`)
         const edge = new Edge(sourcePort, targetPort)
@@ -186,6 +195,21 @@ export class Kuflow {
 
     public readonly getNode = (nodeId: string) => {
         return this.pool.find(a => a.id == nodeId)
+    }
+
+    public readonly export = () => {
+        const list = Array.from(this.nodes.values())
+        const result = list.map(a => {
+            return {
+                id: a.id,
+                parameters: a.parameters,
+                position: {
+                    x: a.x,
+                    y: a.y
+                }
+            }
+        })
+        return result
     }
 
     public divK(i: number) {
@@ -262,19 +286,19 @@ export class Kuflow {
             if (!edge) edge = this._addRenderable(new Edge(event.port))
             const rect = event.target.getBoundingClientRect()
             if (edge.source.type == "input") {
-                edge.sx = this.divK(rect.x - this.zoom.x)
-                edge.sy = this.divK(rect.y - this.zoom.y)
+                edge.sx = this.divK(rect.x - this.zoom.x - this.x)
+                edge.sy = this.divK(rect.y - this.zoom.y - this.y)
             } else {
-                edge.sx = this.divK(rect.x + rect.width - this.zoom.x)
-                edge.sy = this.divK(rect.y + rect.height * 0.5 - this.zoom.y)
+                edge.sx = this.divK(rect.x + rect.width - this.zoom.x - this.x)
+                edge.sy = this.divK(rect.y + rect.height * 0.5 - this.zoom.y - this.y)
             }
             edge.tx = edge.sx
             edge.ty = edge.sy
         })
         this.on("port.mousemove", (event: MouseEventExt) => {
             if (!edge) return;
-            edge.tx = this.divK(event.x - this.zoom.x)
-            edge.ty = this.divK(event.y - this.zoom.y)
+            edge.tx = this.divK(event.x - this.zoom.x - this.x)
+            edge.ty = this.divK(event.y - this.zoom.y - this.y)
             edge.mark()
         })
         this.on("port.mouseup", (event: MouseEventExt) => {
@@ -288,11 +312,11 @@ export class Kuflow {
             if (targetPort.type != edge.source.type) {
                 const rect = event.target.getBoundingClientRect()
                 if (targetPort.type == "input") {
-                    edge.tx = this.divK(rect.x - this.zoom.x)
-                    edge.ty = this.divK(rect.y + rect.height * 0.5 - this.zoom.y)
+                    edge.tx = this.divK(rect.x - this.zoom.x - this.x)
+                    edge.ty = this.divK(rect.y + rect.height * 0.5 - this.zoom.y - this.y)
                 } else {
-                    edge.tx = this.divK(rect.x + rect.width - this.zoom.x)
-                    edge.ty = this.divK(rect.y + rect.height * 0.5 - this.zoom.y)
+                    edge.tx = this.divK(rect.x + rect.width - this.zoom.x - this.x)
+                    edge.ty = this.divK(rect.y + rect.height * 0.5 - this.zoom.y - this.y)
                 }
                 edge.connected = true
                 edge.target = targetPort
@@ -315,6 +339,9 @@ export class Kuflow {
     private setupZoom() {
         const zoom = d3.zoom<HTMLDivElement, unknown>()
         zoom.scaleExtent([0.5, 2])
+        zoom.filter((event) => {
+            return event.button === 0 || event.button === 1 || event.type === 'wheel';
+        });
         zoom.on('zoom', (event) => {
             this.zoom = {
                 x: event.transform.x,
@@ -328,9 +355,6 @@ export class Kuflow {
             }
             this.fire("zoom-pan", event.transform)
         })
-        zoom.filter((event) => {
-            return event.button === 0 || event.button === 1 || event.type === 'wheel';
-        });
 
         this.canvas.call(zoom)
         this.canvas.call(zoom.transform, d3.zoomIdentity.translate(400, 400).scale(this.zoom.k))
@@ -384,6 +408,9 @@ export class Kuflow {
     private renderLoop() {
         // if (this.renderingPool.length > 0) console.log(this.renderingPool.slice(0))
         const pool = Array.from(this.renderingPool)
+        const rect = this.parent.getBoundingClientRect()
+        this.x = rect.x
+        this.y = rect.y
         for (const node of pool) {
             if (node.isDirty) {
                 node.render()

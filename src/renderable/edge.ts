@@ -66,21 +66,21 @@ export class Edge extends Renderable<D3Path<Edge>> {
         if (this.source) {
             const rect = this.source.htmlNode.getBoundingClientRect()
             if (this.source.type == "input") {
-                this.sx = this.kuflow.divK(rect.x - this.kuflow.zoom.x)
-                this.sy = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y)
+                this.sx = this.kuflow.divK(rect.x - this.kuflow.zoom.x - this.kuflow.x)
+                this.sy = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y - this.kuflow.y)
             } else {
-                this.sx = this.kuflow.divK(rect.x + rect.width - this.kuflow.zoom.x)
-                this.sy = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y)
+                this.sx = this.kuflow.divK(rect.x + rect.width - this.kuflow.zoom.x - this.kuflow.x)
+                this.sy = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y - this.kuflow.y)
             }
         }
         if (this.target) {
             const rect = this.target.htmlNode.getBoundingClientRect()
             if (this.target.type == "input") {
-                this.tx = this.kuflow.divK(rect.x - this.kuflow.zoom.x)
-                this.ty = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y)
+                this.tx = this.kuflow.divK(rect.x - this.kuflow.zoom.x - this.kuflow.x)
+                this.ty = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y - this.kuflow.y)
             } else {
-                this.tx = this.kuflow.divK(rect.x + rect.width - this.kuflow.zoom.x)
-                this.ty = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y)
+                this.tx = this.kuflow.divK(rect.x + rect.width - this.kuflow.zoom.x - this.kuflow.x)
+                this.ty = this.kuflow.divK(rect.y + rect.height * 0.5 - this.kuflow.zoom.y - this.kuflow.y)
             }
         }
     }
@@ -90,11 +90,11 @@ export class Edge extends Renderable<D3Path<Edge>> {
         this.node.attr("stroke-width", 2.5)
         this.node.attr("fill", "#00000000");
         const curve = d3.line().curve(d3.curveCatmullRom.alpha(0.95));
-        console.log(curve([
-            [this.sx, this.sy],
-            [this.sx - 5, this.sy],
-            [this.tx, this.ty],
-        ]))
+        // console.log(curve([
+        //     [this.sx, this.sy],
+        //     [this.sx - 5, this.sy],
+        //     [this.tx, this.ty],
+        // ]))
         if (this.connected) {
             if (this.source.type == "input") {
                 this.node.attr("d", curve([

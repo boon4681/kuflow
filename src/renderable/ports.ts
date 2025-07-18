@@ -11,7 +11,7 @@ export class NodePort extends Renderable<D3Div> implements INodePort {
         public id: string,
         public label: string,
         public dataType: string[],
-        public color?: string,
+        public color?: string
     ) {
         super()
         this.color = this.color ? this.color : colorWheel(this.dataType[0])

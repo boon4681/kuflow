@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5000",
-    "build": "tsx --watch ./build.ts",
+    "build": "tsx ./build.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

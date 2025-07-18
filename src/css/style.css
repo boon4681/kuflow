@@ -48,7 +48,7 @@
     .node {
         background: hsl(var(--node-background));
         border-color: hsl(var(--node-border));
-        @apply absolute border left-0 top-0 min-w-[140px] min-h-[60px] rounded cursor-crosshair pb-2 overflow-hidden text-black;
+        @apply absolute border left-0 top-0 min-w-[140px] min-h-[60px] rounded cursor-crosshair pb-2 overflow-hidden text-black flex flex-col;
         @apply data-[kuflow-node-focus=true]:ring-2;
         @apply data-[kuflow-node-focus=true]:ring-[hsl(var(--node-focus-ring))] data-[kuflow-node-focus=true]:ring-offset-4;
         @apply data-[kuflow-node-active=true]:ring-2 data-[kuflow-node-active=true]:ring-green-500 data-[kuflow-node-active=true]:ring-offset-4;
@@ -57,7 +57,7 @@
             border-color: hsl(var(--node-border));
             box-shadow: var(--shadow);
             color: hsl(var(--foreground));
-            @apply flex items-center gap-2 px-2 py-0.5;
+            @apply flex items-center gap-2 px-2 py-0.5 whitespace-nowrap pr-4;
 
             &::before {
                 content: "";
@@ -71,16 +71,16 @@
 
         &>.interfaces {
             color: hsl(var(--muted));
-            @apply flex px-2 space-x-[100px];
+            @apply flex justify-between w-full;
 
-            >.input-group,
-            >.output-group {
+            &>.input-group,
+            &>.output-group {
                 @apply flex flex-col py-2 text-sm;
             }
 
-            >.input-group {
+            &>.input-group {
                 >.input {
-                    @apply flex items-center gap-2 select-none;
+                    @apply pl-2 flex items-center gap-2 select-none;
 
                     &:hover {
                         color: hsl(var(--foreground));
@@ -92,15 +92,16 @@
 
                     &::before {
                         content: "";
-                        @apply relative size-2.5 scale-[0.8] bg-current rounded-full;
+                        @apply relative size-2.5 transform scale-[0.8] rotate-0 bg-current rounded-full;
+                        transform: scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
                         background: hsl(var(--color));
                     }
                 }
             }
 
-            >.output-group {
+            &>.output-group {
                 >.output {
-                    @apply flex items-center gap-2 select-none;
+                    @apply pr-2 flex items-center gap-2 select-none;
 
                     &:hover {
                         color: hsl(var(--foreground));
@@ -112,7 +113,8 @@
 
                     &::after {
                         content: "";
-                        @apply relative size-2.5 scale-[0.8] bg-current rounded-full;
+                        @apply relative size-2.5 scale-[0.8] rotate-0 bg-current rounded-full;
+                        transform: scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
                         background: hsl(var(--color));
                     }
                 }

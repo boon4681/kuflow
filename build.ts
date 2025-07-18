@@ -11,7 +11,7 @@ const main = async () => {
 			'd3'
 		],
 		watch: ['./src/**/*.{ts,tsx,js,css}'],
-		splitting: false,
+		splitting: true,
 		dts: true,
 		clean: true,
 		format: ['cjs', 'esm'],

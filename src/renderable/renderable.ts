@@ -94,7 +94,7 @@ export abstract class Renderable<T extends D3Any> {
         child.mark()
     }
     public readonly remove = () => {
-        this.kuflow._unregisterRenderable(this)
+        this.kuflow?._unregisterRenderable(this)
         if (!this.isDestroyed && this.node) {
             this.onDestroy()
             this.node.remove()
