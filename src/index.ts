@@ -1,4 +1,5 @@
 export * from "./events"
 export * from "./kuflow"
+export * from "./registry"
 export * from "./utils"
 export * from "./hash"

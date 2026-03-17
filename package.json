@@ -1,8 +1,12 @@
 {
   "name": "kuflow",
-  "private": true,
-  "version": "0.0.0",
+  "private": false,
+  "version": "0.0.1",
   "type": "module",
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "dev": "vite --port 5000",
     "build": "tsx ./build.ts",

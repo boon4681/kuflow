@@ -2,15 +2,18 @@ import './css/style.css'
 import { GroupNode, NodeBasic, NodePort, type Renderable } from "./renderable"
 import * as d3 from 'd3';
 import { color, transformStyle } from './utils';
-import type { D3Any } from './type';
+import type { D3Any, INodePosition } from './type';
 import { KUFLOW_PORT_MOUSEDOWN, type PortMouseDownEvent, type MouseEventExt, KUFLOW_NODE_FOCUSED } from './events';
 import { Edge } from './renderable/edge';
 import "./cyclic"
 import { detectCycles, mapLinks } from './cyclic';
+import { createId } from '@paralleldrive/cuid2';
+import type { NodeRegistry } from './registry';
 
 export interface KuflowConfig {
     parent: HTMLDivElement,
     disablePatternBackground?: boolean,
+    registry?: NodeRegistry,
     model?: {
         x?: number;
         y?: number;
@@ -84,6 +87,7 @@ export class Kuflow {
     private toolbar?: d3.Selection<HTMLDivElement, unknown, null, undefined>
 
     private afterRenders: Array<() => void> = []
+    private registry?: NodeRegistry
 
     zoom: { x: number, y: number, k: number } = {
         x: 0,
@@ -117,6 +121,7 @@ export class Kuflow {
     }
 
     constructor(config: KuflowConfig) {
+        this.registry = config.registry
         if (config.model) {
             this.zoom.x = config.model.x ?? this.zoom.x
             this.zoom.y = config.model.y ?? this.zoom.y
@@ -227,6 +232,24 @@ export class Kuflow {
 
     public readonly remove = (obj: NodeBasic) => {
         obj.remove({ removeWithLink: true })
+    }
+
+    public readonly createNode = (type: string, options?: { position?: INodePosition, id?: string }) => {
+        if (!this.registry) throw new Error("No registry provided in KuflowConfig")
+        const def = this.registry.get(type)
+        if (!def) throw new Error(`Node type "${type}" not found in registry`)
+
+        const node = new NodeBasic(options?.id ?? createId(), {
+            _ref: type,
+            title: def.title,
+            ports: {
+                input: (def.inputs ?? []).map(p => new NodePort(createId(), p.label, p.dataType)),
+                output: (def.outputs ?? []).map(p => new NodePort(createId(), p.label, p.dataType)),
+            },
+            position: options?.position,
+            onMount: def.body,
+        })
+        return this.add(node)
     }
 
     public readonly addEventListener = <T extends registeredEvents>(name: T, cb: (...args: any) => void) => {
