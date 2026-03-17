@@ -1,5 +1,5 @@
 import { NodeBasic, Renderable } from ".";
-import { colorWheel } from "../utils";
+import { colorWheel, hexToHSL } from "../utils";
 import type { D3Any, D3Div, INodePort, PortType } from "../type";
 import { KUFLOW_PORT_MOUSEDOWN, type MouseEventExt, type PortMouseDownEvent } from "../events";
 
@@ -7,13 +7,22 @@ export class NodePort extends Renderable<D3Div> implements INodePort {
     declare public parent: NodeBasic | undefined;
     type!: PortType;
     nodeId!: string;
+    color!: string;
     constructor(
         public id: string,
         public label: string,
         public dataType: string[],
-        public color?: string
+        public meta?: {
+            _ref_name?: string
+            color?: string
+        }
     ) {
         super()
+        if (this.meta?.color?.startsWith("#")) {
+            const g = hexToHSL(this.meta.color)
+            this.color = `${g.h} ${g.l}% ${g.s}%`
+            console.log(this.color)
+        }
         this.color = this.color ? this.color : colorWheel(this.dataType[0])
     }
     update(): void {

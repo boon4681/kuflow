@@ -3,14 +3,71 @@ import { GroupNode, NodeBasic, NodePort, type Renderable } from "./renderable"
 import * as d3 from 'd3';
 import { color, transformStyle } from './utils';
 import type { D3Any } from './type';
-import { KUFLOW_PORT_MOUSEDOWN, type PortMouseDownEvent, type MouseEventExt } from './events';
+import { KUFLOW_PORT_MOUSEDOWN, type PortMouseDownEvent, type MouseEventExt, KUFLOW_NODE_FOCUSED } from './events';
 import { Edge } from './renderable/edge';
 import "./cyclic"
 import { detectCycles, mapLinks } from './cyclic';
+
 export interface KuflowConfig {
     parent: HTMLDivElement,
-    disablePatternBackground?: boolean
+    disablePatternBackground?: boolean,
+    model?: {
+        x?: number;
+        y?: number;
+        k?: number;
+    } | {
+        x?: number;
+        y?: number;
+        k?: number;
+        edges: {
+            id: string;
+            node_id: string;
+        }[][];
+        nodes: {
+            id: string;
+            parameters: void | {
+                [k: string]: FormDataEntryValue;
+            };
+            _ref: string | null;
+            position: {
+                x: number;
+                y: number;
+            };
+            ports: {
+                input: {
+                    id: string;
+                    type: string[];
+                    label: string;
+                    meta: {
+                        _ref_name?: string;
+                        color?: string;
+                    } | undefined;
+                }[];
+                output: {
+                    id: string;
+                    type: string[];
+                    label: string;
+                    meta: {
+                        _ref_name?: string;
+                        color?: string;
+                    } | undefined;
+                }[];
+            };
+        }[];
+    }
 }
+
+type Callable = (...args: any) => void
+type registeredEvents =
+    'zoom' |
+    'pan' |
+    'zoom-pan' |
+    'port.mousedown' |
+    'port.mousemove' |
+    'port.mouseup' |
+    'node.focus' |
+    'canvas.update'
+    ;
 
 export class Kuflow {
     private parent: HTMLDivElement
@@ -24,6 +81,9 @@ export class Kuflow {
     private bgSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
     private parentSizeObserver: ResizeObserver
     private mutationObserver: MutationObserver
+    private toolbar?: d3.Selection<HTMLDivElement, unknown, null, undefined>
+
+    private afterRenders: Array<() => void> = []
 
     zoom: { x: number, y: number, k: number } = {
         x: 0,
@@ -45,25 +105,23 @@ export class Kuflow {
     private get links() {
         return Array.from(this._links.values())
     }
-
-    private readonly registeredEvents = [
-        'zoom',
-        'pan',
-        'zoom-pan',
-        'port.mousedown',
-        'port.mousemove',
-        'port.mouseup'
-    ] as const
-    private eventPools: Record<typeof this.registeredEvents[number], ((...args: any) => void)[]> = {
+    private eventPools: Record<registeredEvents, Callable[]> = {
         'zoom': [],
         'pan': [],
         'zoom-pan': [],
         'port.mousedown': [],
         'port.mousemove': [],
-        'port.mouseup': []
+        'port.mouseup': [],
+        'node.focus': [],
+        'canvas.update': []
     }
 
     constructor(config: KuflowConfig) {
+        if (config.model) {
+            this.zoom.x = config.model.x ?? this.zoom.x
+            this.zoom.y = config.model.y ?? this.zoom.y
+            this.zoom.k = config.model.k ?? this.zoom.k
+        }
         // setup html element
         this.parent = config.parent
         this.parent.classList.add('kuflow')
@@ -130,12 +188,28 @@ export class Kuflow {
         this.canvas.on("mousemove", (event) => {
             this.fire("port.mousemove", event)
         })
-        this.canvas.on("mousedown", () => {
+        this.canvas.on("mousedown", (event) => {
+            if (this.toolbar && (this.toolbar.node() == event.target || this.toolbar.node()?.contains(event.target))) {
+                return
+            }
             this.focusedNode?.mark()
             this.focusedNode = null
         })
         this.canvas.on("mouseup", (event) => {
             this.fire("port.mouseup", event)
+        })
+        // node event
+        this.nodeGroup.on(KUFLOW_NODE_FOCUSED, ({ detail }) => {
+            if (this.toolbar) {
+                this.toolbar.remove()
+                this.toolbar = undefined
+            }
+            this.toolbar = this.nodeGroup.append("div")
+            this.toolbar.attr('class', 'node-toolbar')
+            this.toolbar?.style('left', `${detail.x + this.divK(detail.htmlNode.getBoundingClientRect().width / 2)}px`)
+            this.toolbar?.style('top', `${detail.y - 20}px`)
+
+            this.fire("node.focus", detail, this.toolbar.node())
         })
 
         // setup editor
@@ -152,8 +226,26 @@ export class Kuflow {
     }
 
     public readonly remove = (obj: NodeBasic) => {
-        obj.remove()
+        obj.remove({ removeWithLink: true })
     }
+
+    public readonly addEventListener = <T extends registeredEvents>(name: T, cb: (...args: any) => void) => {
+        this.on(name, cb)
+        return () => {
+            this.removeEventListener(name, cb)
+        }
+    }
+    public readonly removeEventListener = <T extends registeredEvents>(name: T, cb: (...args: any) => void) => {
+        this.remove_on(name, cb)
+    }
+
+    public readonly addAfterRender = (cb: () => void) => {
+        this.afterRenders.push(cb)
+        return () => {
+            this.afterRenders = this.afterRenders.filter(a => a != cb)
+        }
+    }
+
 
     protected readonly _addRenderable = <V extends D3Any, T extends Renderable<V>>(obj: T) => {
         this.pool.push(obj)
@@ -203,13 +295,47 @@ export class Kuflow {
             return {
                 id: a.id,
                 parameters: a.parameters,
+                _ref: a._ref,
                 position: {
                     x: a.x,
                     y: a.y
+                },
+                ports: {
+                    input: a.ports.input.map(a => {
+                        return {
+                            id: a.id,
+                            type: a.dataType,
+                            label: a.label,
+                            meta: a.meta
+                        }
+                    }),
+                    output: a.ports.output.map(a => {
+                        return {
+                            id: a.id,
+                            type: a.dataType,
+                            label: a.label,
+                            meta: a.meta
+                        }
+                    })
                 }
             }
         })
-        return result
+        return {
+            x: this.zoom.x,
+            y: this.zoom.y,
+            k: this.zoom.k,
+            edges: this.links.map(a => [
+                {
+                    id: a.source.id,
+                    node_id: a.source.nodeId
+                },
+                {
+                    id: a.target.id,
+                    node_id: a.target.nodeId
+                },
+            ]),
+            nodes: result
+        }
     }
 
     public divK(i: number) {
@@ -256,12 +382,15 @@ export class Kuflow {
         return [undefined, undefined] as const
     }
 
-    private fire<T extends keyof typeof this.eventPools>(name: T, data: any) {
-        this.eventPools[name].forEach(a => a(data))
+    private fire<T extends registeredEvents>(name: T, ...args: any) {
+        this.eventPools[name].forEach(a => a(...args))
     }
 
-    private on<T extends keyof typeof this.eventPools>(name: T, cb: (...args: any) => void) {
+    private on<T extends registeredEvents>(name: T, cb: (...args: any) => void) {
         this.eventPools[name].push(cb)
+    }
+    private remove_on<T extends registeredEvents>(name: T, cb: (...args: any) => void) {
+        this.eventPools[name] = this.eventPools[name].filter(a => cb !== a)
     }
 
     private isCylic(links: Edge[]) {
@@ -357,7 +486,7 @@ export class Kuflow {
         })
 
         this.canvas.call(zoom)
-        this.canvas.call(zoom.transform, d3.zoomIdentity.translate(400, 400).scale(this.zoom.k))
+        this.canvas.call(zoom.transform, d3.zoomIdentity.translate(this.zoom.x, this.zoom.y).scale(this.zoom.k))
     }
 
     private setupGridPattern() {
@@ -369,7 +498,7 @@ export class Kuflow {
             .attr('patternUnits', 'userSpaceOnUse');
 
         const circle = gridPattern.append('circle')
-            .attr('fill', color('grid'))
+            .attr('fill', color('kuflow-grid'))
             .attr('cx', '1')
             .attr('cy', '1')
             .attr('r', '1')
@@ -408,6 +537,10 @@ export class Kuflow {
     private renderLoop() {
         // if (this.renderingPool.length > 0) console.log(this.renderingPool.slice(0))
         const pool = Array.from(this.renderingPool)
+        if (pool.length) {
+            this.fire("canvas.update")
+        }
+        this.renderingPool = []
         const rect = this.parent.getBoundingClientRect()
         this.x = rect.x
         this.y = rect.y
@@ -416,7 +549,19 @@ export class Kuflow {
                 node.render()
             }
         }
-        this.renderingPool = []
+        if (this.focusedNode != null) {
+            this.toolbar?.style('left', `${this.focusedNode.x + this.divK(this.focusedNode.htmlNode.getBoundingClientRect().width / 2)}px`)
+            this.toolbar?.style('top', `${this.focusedNode.y - 20}px`)
+        }
+        if (this.toolbar && this.focusedNode == null) {
+            this.toolbar.remove()
+            this.toolbar = undefined
+        }
+        if (this.pool.length) {
+            for (const cb of this.afterRenders) {
+                cb()
+            }
+        }
         requestAnimationFrame(this.renderLoop.bind(this));
     }
 

@@ -4,7 +4,7 @@ import { NodeBasic, NodePort } from "../src/renderable"
 
 const kuflow = new Kuflow({
     parent: document.querySelector<HTMLDivElement>('#kuflow')!,
-    disablePatternBackground: true
+    disablePatternBackground: false
 })
 
 const node1 = kuflow.add(new NodeBasic("1", {
@@ -88,7 +88,10 @@ kuflow.add(new NodeBasic("4", {
 
 // kuflow.remove(node1)
 kuflow.connect("n2-o-1", "n1-i-1")
-// kuflow.connect("n3-o-1", "n1-i-1")
+kuflow.connect("n1-o-1", "n3-i-1")
 setTimeout(() => {
     console.log(kuflow.export())
-})
+}, 200)
+// setTimeout(() => {
+//     kuflow.remove(node1)
+// }, 100)

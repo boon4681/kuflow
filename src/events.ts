@@ -15,6 +15,7 @@ type name<T extends string> =
 const name = <T extends string>(str: name<T>): name<T> => str as name<T>
 
 export const KUFLOW_PORT_MOUSEDOWN = name("KUFLOW_PORT_MOUSEDOWN")
+export const KUFLOW_NODE_FOCUSED = name("KUFLOW_NODE_FOCUSED")
 
 export interface MouseEventExt extends MouseEvent {
     target: HTMLElement

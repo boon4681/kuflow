@@ -3,6 +3,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { NodePort, Renderable } from ".";
 import { transformStyle } from "../utils";
 import type { D3Div, INodePosition } from "../type";
+import { KUFLOW_NODE_FOCUSED } from "../events";
 
 export class GroupNode extends Renderable<D3Div> {
     id: string = createId();
@@ -17,6 +18,7 @@ export class GroupNode extends Renderable<D3Div> {
 export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
     x: number = 0
     y: number = 0
+    _ref: string | null = null
     title: string = "Test"
     private _active: boolean = false
     private _focus: boolean = false
@@ -49,6 +51,7 @@ export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
     constructor(
         public id: string,
         private options?: {
+            _ref?: string
             title?: string
             ports?: { input: NodePort[], output: NodePort[] },
             position?: INodePosition,
@@ -62,6 +65,7 @@ export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
             input: [],
             output: []
         }
+        this._ref = options?._ref ?? "unk"
         this.title = options?.title ?? this.title
         this.x = options?.position?.x ?? 0
         this.y = options?.position?.y ?? 0
@@ -108,6 +112,11 @@ export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
         drag.on("start", (event, d) => {
             this.kuflow.focusedNode?.mark()
             this.kuflow.focusedNode = this
+            node.dispatch(KUFLOW_NODE_FOCUSED, {
+                detail: this,
+                bubbles: true,
+                cancelable: true
+            })
             if (this.form.node()!.contains(event.sourceEvent.target)) {
                 event.sourceEvent.preventDefault();
                 return

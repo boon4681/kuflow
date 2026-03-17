@@ -46,7 +46,7 @@
 }
 
 .kuflow {
-    --background: 210 20% 97%;
+    --kuflow-background: 210 20% 97%;
 }
 
 .kuflow .node {

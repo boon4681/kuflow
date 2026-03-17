@@ -128,6 +128,7 @@ export class Edge extends Renderable<D3Path<Edge>> {
         }
     }
     onDestroy(): void {
+        this.kuflow._removeLink(this)
         this.container.remove()
         // this.kuflow.
     }

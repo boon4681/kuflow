@@ -1,6 +1,10 @@
 import type { Kuflow } from "../kuflow"
 import type { D3Any } from "../type"
 
+type RenderableRemoveOptions = {
+    removeWithLink?: boolean
+}
+
 export abstract class Renderable<T extends D3Any> {
     protected dirty = false
     protected mounted = false
@@ -93,11 +97,20 @@ export abstract class Renderable<T extends D3Any> {
         this.children.push(child)
         child.mark()
     }
-    public readonly remove = () => {
+    public readonly remove = (options?: RenderableRemoveOptions) => {
+        const removeWithLink = options?.removeWithLink ?? false
         this.kuflow?._unregisterRenderable(this)
         if (!this.isDestroyed && this.node) {
+            if (this.kuflow.focusedNode?.id == this.id) {
+                this.kuflow.focusedNode = null
+            }
             this.onDestroy()
             this.node.remove()
+        }
+        if (removeWithLink) {
+            for (const link of this._link) {
+                link.remove(options)
+            }
         }
         this._link = new Set()
         for (const source of this._linkSource) {
