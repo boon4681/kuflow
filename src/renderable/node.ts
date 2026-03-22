@@ -2,17 +2,20 @@ import * as d3 from "d3";
 import { createId } from "@paralleldrive/cuid2";
 import { NodePort, Renderable } from ".";
 import { transformStyle } from "../utils";
-import type { D3Div, INodePosition } from "../type";
+import type { D3Any, D3Div, INodePosition } from "../type";
 import { KUFLOW_NODE_FOCUSED } from "../events";
 
 export class GroupNode extends Renderable<D3Div> {
-    id: string = createId();
+    id: string = createId()
+    private _container: D3Div
     constructor(container: D3Div) {
-        super();
-        this.bind(container)
+        super()
+        this._container = container
     }
-    onMount(): void { }
-    update(): void { }
+    protected onMount(): void {
+        this.node = this._container
+    }
+    protected onUpdate(): void { }
 }
 
 export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
@@ -48,6 +51,9 @@ export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
         return data
     }
 
+    private _ready: Promise<void> = Promise.resolve()
+    get ready() { return this._ready }
+
     constructor(
         public id: string,
         private options?: {
@@ -56,33 +62,42 @@ export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
             ports?: { input: NodePort[], output: NodePort[] },
             position?: INodePosition,
             active?: boolean,
-            onMount?: (body: HTMLFormElement) => void,
+            onMount?: (body: HTMLFormElement) => void | Promise<void>,
+            onValidate?: (node: NodeBasic) => void | Promise<void>,
             onPreprocessParameters?: (node: NodeBasic, paramenters: Record<string, FormDataEntryValue>) => void
         }
     ) {
         super();
-        this.ports = options?.ports ? options.ports : {
-            input: [],
-            output: []
-        }
+        this.ports = options?.ports ?? { input: [], output: [] }
         this._ref = options?._ref ?? "unk"
         this.title = options?.title ?? this.title
         this.x = options?.position?.x ?? 0
         this.y = options?.position?.y ?? 0
         this._active = options?.active ?? false
     }
-    update(): void {
+
+    async validate(): Promise<boolean> {
+        await this._ready
+        this.kuflow.clearErrors(this.id)
+        if (this.options?.onValidate) {
+            await this.options.onValidate(this)
+        }
+        return !this.kuflow.hasErrors(this.id)
+    }
+
+    protected onUpdate(): void {
         this._focus = this.kuflow.focusedNode?.id == this.id
         this.node.attr("data-kuflow-node-active", this.active)
         this.node.attr("data-kuflow-node-focus", this.focus)
+        this.node.attr("data-kuflow-node-error", this.kuflow.hasErrors(this.id))
         this.titleNode.text(this.title)
         this.node?.style('transform', transformStyle({
             x: this.x,
             y: this.y
         }))
     }
-    onMount(): void {
-        const node = this.parentNode!.append("div")
+    protected onMount(container: D3Any): void {
+        const node = container.append("div")
         this.titleNode = node.append("div")
         this.titleNode.attr('class', 'name')
         const interfaceGroup = node.append('div')
@@ -145,16 +160,22 @@ export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
         })
         node.call(drag)
         for (const port of this.ports.input) {
-            this.addChild(inputGroup, port, this.id, "input")
+            port.type = "input"
+            this.addChild(port, inputGroup)
         }
         for (const port of this.ports.output) {
-            this.addChild(outputGroup, port, this.id, "output")
+            port.type = "output"
+            this.addChild(port, outputGroup)
         }
-        this.bind(node)
+
+        this.node = node
         this.kuflow.nodes.add(this)
-        this.options?.onMount?.(this.form.node()!)
+        const result = this.options?.onMount?.(this.form.node()!)
+        if (result instanceof Promise) {
+            this._ready = result.catch(() => {})
+        }
     }
-    onDestroy(): void {
+    protected onDestroy(): void {
         this.kuflow.nodes.delete(this)
     }
 }

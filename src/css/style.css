@@ -63,6 +63,7 @@
         @apply data-[kuflow-node-focus=true]:ring-2;
         @apply data-[kuflow-node-focus=true]:ring-[hsl(var(--node-focus-ring))] data-[kuflow-node-focus=true]:ring-offset-4;
         @apply data-[kuflow-node-active=true]:ring-green-500 data-[kuflow-node-active=true]:ring-offset-4 data-[kuflow-node-active=true]:ring-2;
+        @apply data-[kuflow-node-error=true]:ring-2 data-[kuflow-node-error=true]:ring-red-500 data-[kuflow-node-error=true]:ring-offset-4;
         --tw-ring-inset: ;
         --tw-ring-offset-color: hsl(var(--kuflow-background));
 

@@ -17,3 +17,10 @@ export interface INodePort {
 }
 
 export type PortType = "input" | "output"
+
+export interface NodeError {
+    nodeId: string
+    port?: string
+    param?: string
+    message: string
+}

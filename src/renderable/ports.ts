@@ -4,10 +4,9 @@ import type { D3Any, D3Div, INodePort, PortType } from "../type";
 import { KUFLOW_PORT_MOUSEDOWN, type MouseEventExt, type PortMouseDownEvent } from "../events";
 
 export class NodePort extends Renderable<D3Div> implements INodePort {
-    declare public parent: NodeBasic | undefined;
-    type!: PortType;
-    nodeId!: string;
-    color!: string;
+    declare parent: NodeBasic | undefined
+    type!: PortType
+    color: string
     constructor(
         public id: string,
         public label: string,
@@ -21,31 +20,32 @@ export class NodePort extends Renderable<D3Div> implements INodePort {
         if (this.meta?.color?.startsWith("#")) {
             const g = hexToHSL(this.meta.color)
             this.color = `${g.h} ${g.l}% ${g.s}%`
-            console.log(this.color)
+        } else {
+            this.color = colorWheel(this.dataType[0])
         }
-        this.color = this.color ? this.color : colorWheel(this.dataType[0])
     }
-    update(): void {
-        this.node.text(this.label)
+
+    get nodeId(): string {
+        return this.parent!.id
     }
-    onMount(container: D3Any, nodeId: string, portType: PortType): void {
+
+    protected onMount(container: D3Any): void {
         const node = container.append("div")
-        this.type = portType
-        if (portType == "input") {
+        if (this.type === "input") {
             node.attr('data-kuflow-node-input-id', this.id)
             node.attr('class', "input")
         }
-        if (portType == "output") {
+        if (this.type === "output") {
             node.attr('data-kuflow-node-output-id', this.id)
             node.attr('class', "output")
         }
-        node.style('--color', this.color!)
+        node.style('--color', this.color)
         node.on('mousedown', (e: MouseEvent) => {
             e.stopPropagation();
             node.dispatch(KUFLOW_PORT_MOUSEDOWN, {
                 detail: Object.assign(e as MouseEventExt, {
-                    portType: portType,
-                    nodeId: this.parent!.id,
+                    portType: this.type,
+                    nodeId: this.nodeId,
                     interfaceId: this.id,
                     interfaceType: this.dataType,
                     port: this
@@ -54,13 +54,16 @@ export class NodePort extends Renderable<D3Div> implements INodePort {
                 cancelable: true
             })
         })
-        this.bind(node)
+        this.node = node
         this.parent?.link(this)
         this.kuflow._addToNodePortTable(this)
-        this.nodeId = nodeId
     }
-    onDestroy(): void {
-        // this.kuflow._removeLink()
+
+    protected onUpdate(): void {
+        this.node.text(this.label)
+    }
+
+    protected onDestroy(): void {
         this.kuflow._removeFromNodePortTable(this)
     }
 }

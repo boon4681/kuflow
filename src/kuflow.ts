@@ -2,7 +2,7 @@ import './css/style.css'
 import { GroupNode, NodeBasic, NodePort, type Renderable } from "./renderable"
 import * as d3 from 'd3';
 import { color, transformStyle } from './utils';
-import type { D3Any, INodePosition } from './type';
+import type { D3Any, INodePosition, NodeError } from './type';
 import { KUFLOW_PORT_MOUSEDOWN, type PortMouseDownEvent, type MouseEventExt, KUFLOW_NODE_FOCUSED } from './events';
 import { Edge } from './renderable/edge';
 import "./cyclic"
@@ -69,6 +69,7 @@ type registeredEvents =
     'port.mousemove' |
     'port.mouseup' |
     'node.focus' |
+    'node.error' |
     'canvas.update'
     ;
 
@@ -105,6 +106,7 @@ export class Kuflow {
     private registerRenderableTable: Map<string, Renderable<any>> = new Map()
     private linkPortInputToOutputTable: Map<string, { outputPortId: string, edge: Edge }> = new Map()
     private _links: Set<Edge> = new Set()
+    private _errors: Map<string, NodeError[]> = new Map()
 
     private get links() {
         return Array.from(this._links.values())
@@ -117,6 +119,7 @@ export class Kuflow {
         'port.mousemove': [],
         'port.mouseup': [],
         'node.focus': [],
+        'node.error': [],
         'canvas.update': []
     }
 
@@ -269,6 +272,31 @@ export class Kuflow {
         }
     }
 
+    public readonly error = (nodeId: string, error: { port?: string, param?: string, message: string }) => {
+        const entry: NodeError = { nodeId, ...error }
+        if (!this._errors.has(nodeId)) {
+            this._errors.set(nodeId, [])
+        }
+        this._errors.get(nodeId)!.push(entry)
+        this.fire("node.error", entry)
+        const node = this.getNode(nodeId)
+        if (node) node.mark()
+    }
+
+    public readonly clearErrors = (nodeId: string) => {
+        this._errors.delete(nodeId)
+        const node = this.getNode(nodeId)
+        if (node) node.mark()
+    }
+
+    public readonly getErrors = (nodeId: string): NodeError[] => {
+        return this._errors.get(nodeId) ?? []
+    }
+
+    public readonly hasErrors = (nodeId: string): boolean => {
+        const errors = this._errors.get(nodeId)
+        return !!errors && errors.length > 0
+    }
 
     protected readonly _addRenderable = <V extends D3Any, T extends Renderable<V>>(obj: T) => {
         this.pool.push(obj)

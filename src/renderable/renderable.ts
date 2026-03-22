@@ -8,25 +8,39 @@ type RenderableRemoveOptions = {
 export abstract class Renderable<T extends D3Any> {
     protected dirty = false
     protected mounted = false
-    protected isDestroyed = false
-    public parent!: Renderable<any> | undefined
-    protected parentNode!: D3Any
+    protected destroyed = false
+    parent: Renderable<any> | undefined
+    protected kuflow!: Kuflow
     protected children: Renderable<any>[] = []
     /**
-     * Link other object to this object.
-     * when this object got marked, mark all objects that linked to this object
+     * Linked renderables: when this object is marked dirty, these get marked too.
      */
-    protected _link: Set<Renderable<any>> = new Set()
-    protected _linkSource: Set<Renderable<any>> = new Set()
-    private _constructPhase = true
+    private _links = new Set<Renderable<any>>()
+    /**
+     * Reverse links: objects that link TO this object (for cleanup on removal).
+     */
+    private _linkSources = new Set<Renderable<any>>()
     node!: T
 
     abstract id: string
-    abstract update(): void
-    protected kuflow!: Kuflow
-    abstract onMount(container?: D3Any, ...rest: any): void
-    onDestroy(): void { }
-    onLinkMarked(): void { }
+
+    /**
+     * Create DOM elements and assign this.node.
+     * Called once during mount(). Use addChild() here to attach children.
+     */
+    protected abstract onMount(container?: D3Any): void
+
+    /**
+     * Update DOM to reflect current state.
+     * Called each render frame when dirty.
+     */
+    protected abstract onUpdate(): void
+
+    /** Cleanup hook called before DOM removal. */
+    protected onDestroy(): void { }
+
+    /** Called when a linked renderable's mark propagates to this one. */
+    protected onLinkMarked(): void { }
 
     get isDirty() {
         return this.dirty
@@ -34,86 +48,78 @@ export abstract class Renderable<T extends D3Any> {
     get htmlNode(): HTMLElement {
         return (this.node as any)._groups[0][0]
     }
-    public readonly mount = (kuflow: Kuflow, parent?: Renderable<any>, container?: D3Any, ...rest: any) => {
-        this._constructPhase = false
+
+    mount(kuflow: Kuflow, parent?: Renderable<any>, container?: D3Any) {
         this.kuflow = kuflow
-        this.kuflow
-        if (parent) {
-            this.parent = parent
-            this.parentNode = parent.node
-        }
-        this.kuflow._registerRenderable(this)
-        this.mark()
-        this.onMount(container ?? parent?.node, ...rest)
+        this.parent = parent
+        kuflow._registerRenderable(this)
         this.mounted = true
+        this.onMount(container ?? parent?.node)
+        this.mark()
     }
-    public readonly bind = (node: T) => {
-        if (this.node) {
-            throw new Error("This object is already bind.")
-        }
-        this.node = node
-    }
-    public readonly mark = () => {
+
+    mark() {
         this.dirty = true
         this.kuflow.renderingPool.push(this)
-        for (const obj of this._link) {
-            obj.onLinkMarked()
-            obj.mark()
+        for (const linked of this._links) {
+            linked.onLinkMarked()
+            linked.mark()
         }
     }
-    public readonly link = (obj: Renderable<any>) => {
-        this._link.add(obj)
-        obj._linkSource.add(this)
-    }
-    public readonly unlink = (obj: Renderable<any>) => {
-        this._link.delete(obj)
-        obj._linkSource.delete(this)
-    }
-    public readonly unmark = () => {
+
+    unmark() {
         this.dirty = false
     }
-    public readonly render = () => {
-        if (!this.dirty) {
-            return;
-        }
-        this.update() // render-self
+
+    render() {
+        if (!this.dirty) return
+        this.onUpdate()
         for (const child of this.children) {
-            child.render();
+            child.render()
         }
         this.unmark()
     }
-    public readonly removeChild = (node: Renderable<any>): void => {
-        const index = this.children.findIndex(child => child != node);
+
+    link(obj: Renderable<any>) {
+        this._links.add(obj)
+        obj._linkSources.add(this)
+    }
+
+    unlink(obj: Renderable<any>) {
+        this._links.delete(obj)
+        obj._linkSources.delete(this)
+    }
+
+    addChild(child: Renderable<D3Any>, container?: D3Any) {
+        if (!this.mounted) throw new Error("Cannot add child before mount")
+        child.mount(this.kuflow, this, container)
+        this.children.push(child)
+    }
+
+    removeChild(child: Renderable<any>) {
+        const index = this.children.indexOf(child)
         if (index !== -1) {
-            const child = this.children[index];
-            child.parent = undefined;
-            this.children.splice(index, 1);
-            this.mark();
+            this.children.splice(index, 1)
+            child.parent = undefined
         }
     }
-    public readonly addChild = (container: D3Any, child: Renderable<D3Any>, ...rest: any): void => {
-        if (this._constructPhase) throw new Error("cannot add child object during constructor phase")
-        child.mount(this.kuflow, this, container, ...rest)
-        this.children.push(child)
-        child.mark()
-    }
-    public readonly remove = (options?: RenderableRemoveOptions) => {
-        const removeWithLink = options?.removeWithLink ?? false
+
+    remove(options?: RenderableRemoveOptions) {
         this.kuflow?._unregisterRenderable(this)
-        if (!this.isDestroyed && this.node) {
-            if (this.kuflow.focusedNode?.id == this.id) {
+        if (!this.destroyed && this.node) {
+            if (this.kuflow.focusedNode?.id === this.id) {
                 this.kuflow.focusedNode = null
             }
             this.onDestroy()
             this.node.remove()
         }
-        if (removeWithLink) {
-            for (const link of this._link) {
-                link.remove(options)
+        if (options?.removeWithLink) {
+            for (const linked of this._links) {
+                linked.remove(options)
             }
         }
-        this._link = new Set()
-        for (const source of this._linkSource) {
+        this._links = new Set()
+        for (const source of this._linkSources) {
             source.unlink(this)
         }
         for (const child of this.children) {
@@ -123,7 +129,9 @@ export abstract class Renderable<T extends D3Any> {
             this.parent.removeChild(this)
             this.parent.mark()
         }
-        if (this.kuflow) this.kuflow.pool = this.kuflow.pool.filter(a => a != this)
-        this.isDestroyed = true
+        if (this.kuflow) {
+            this.kuflow.pool = this.kuflow.pool.filter(a => a !== this)
+        }
+        this.destroyed = true
     }
 }

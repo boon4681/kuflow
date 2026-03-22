@@ -80,18 +80,44 @@ kuflow.add(new NodeBasic("4", {
     },
 }))
 
-// node1.active = true
-
-// setTimeout(()=>{
-//     node1.active = false
-// }, 4000)
-
-// kuflow.remove(node1)
 kuflow.connect("n2-o-1", "n1-i-1")
 kuflow.connect("n1-o-1", "n3-i-1")
+
+// --- validation test node ---
+const node5 = kuflow.add(new NodeBasic("5", {
+    title: "Validate Me",
+    ports: {
+        input: [new NodePort("n5-i-1", "value", ["AXIUM.INT"])],
+        output: [new NodePort("n5-o-1", "result", ["AXIUM.INT"])]
+    },
+    position: { x: 400, y: 400 },
+    onMount(body) {
+        body.innerHTML = `
+<input name="threshold" type="number" placeholder="threshold" value="" />
+<button type="button" id="validate-btn">Validate</button>
+`
+        body.querySelector('#validate-btn')!.addEventListener('click', async () => {
+            const valid = await node5.validate()
+            console.log('[validate]', valid ? 'OK' : 'FAILED', kuflow.getErrors('5'))
+        })
+    },
+    async onValidate(node) {
+        const params = node.parameters as Record<string, FormDataEntryValue>
+        const threshold = params['threshold']
+        // simulate async backend check
+        await new Promise<void>((resolve) => setTimeout(resolve, 300))
+        if (!threshold || threshold === '') {
+            kuflow.error(node.id, { param: 'threshold', message: 'threshold is required' })
+        } else if (Number(threshold) < 0) {
+            kuflow.error(node.id, { param: 'threshold', message: 'threshold must be >= 0' })
+        }
+    }
+}))
+
+kuflow.addEventListener('node.error', (error) => {
+    console.warn('[node.error]', error)
+})
+
 setTimeout(() => {
     console.log(kuflow.export())
 }, 200)
-// setTimeout(() => {
-//     kuflow.remove(node1)
-// }, 100)
