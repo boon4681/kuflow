@@ -11,19 +11,19 @@ const main = async () => {
 			'd3'
 		],
 		watch: ['./src/**/*.{ts,tsx,js,css}'],
-		splitting: true,
+		splitting: false,
 		dts: true,
 		clean: true,
 		format: ['cjs', 'esm'],
 		outExtension: (ctx) => {
 			if (ctx.format === 'cjs') {
 				return {
-					dts: '.d.ts',
+					dts: '.d.cts',
 					js: '.js',
 				};
 			}
 			return {
-				dts: '.d.mts',
+				dts: '.d.ts',
 				js: '.mjs',
 			};
 		},

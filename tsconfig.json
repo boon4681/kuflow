@@ -22,5 +22,5 @@
     "noUncheckedSideEffectImports": true,
     "types": ["node"]
   },
-  "include": ["src", "test/main.ts", "build.ts"]
+  "include": ["src", "test/main.ts", "build.ts", "test/vite-env.d.ts"]
 }
