@@ -78,9 +78,11 @@ export class NodeBasic extends Renderable<D3Div<NodeBasic>> {
 
     async validate(): Promise<boolean> {
         await this._ready
-        this.kuflow.clearErrors(this.id)
-        if (this.options?.onValidate) {
-            await this.options.onValidate(this)
+        this.kuflow._beginBuffer(this.id)
+        try {
+            if (this.options?.onValidate) await this.options.onValidate(this)
+        } finally {
+            this.kuflow._commitBuffer(this.id)
         }
         return !this.kuflow.hasErrors(this.id)
     }

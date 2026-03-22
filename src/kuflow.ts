@@ -107,6 +107,8 @@ export class Kuflow {
     private linkPortInputToOutputTable: Map<string, { outputPortId: string, edge: Edge }> = new Map()
     private _links: Set<Edge> = new Set()
     private _errors: Map<string, NodeError[]> = new Map()
+    private _errorBuffer: Map<string, NodeError[]> = new Map()
+    private _buffering: Set<string> = new Set()
 
     private get links() {
         return Array.from(this._links.values())
@@ -274,9 +276,12 @@ export class Kuflow {
 
     public readonly error = (nodeId: string, error: { port?: string, param?: string, message: string }) => {
         const entry: NodeError = { nodeId, ...error }
-        if (!this._errors.has(nodeId)) {
-            this._errors.set(nodeId, [])
+        if (this._buffering.has(nodeId)) {
+            if (!this._errorBuffer.has(nodeId)) this._errorBuffer.set(nodeId, [])
+            this._errorBuffer.get(nodeId)!.push(entry)
+            return
         }
+        if (!this._errors.has(nodeId)) this._errors.set(nodeId, [])
         this._errors.get(nodeId)!.push(entry)
         this.fire("node.error", entry)
         const node = this.getNode(nodeId)
@@ -285,6 +290,25 @@ export class Kuflow {
 
     public readonly clearErrors = (nodeId: string) => {
         this._errors.delete(nodeId)
+        const node = this.getNode(nodeId)
+        if (node) node.mark()
+    }
+
+    _beginBuffer(nodeId: string) {
+        this._buffering.add(nodeId)
+        this._errorBuffer.delete(nodeId)
+    }
+
+    _commitBuffer(nodeId: string) {
+        this._buffering.delete(nodeId)
+        const pending = this._errorBuffer.get(nodeId) ?? []
+        this._errorBuffer.delete(nodeId)
+        this._errors.delete(nodeId)
+        for (const entry of pending) {
+            if (!this._errors.has(nodeId)) this._errors.set(nodeId, [])
+            this._errors.get(nodeId)!.push(entry)
+            this.fire("node.error", entry)
+        }
         const node = this.getNode(nodeId)
         if (node) node.mark()
     }
