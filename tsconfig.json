@@ -19,7 +19,8 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": false,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "types": ["node"]
   },
-  "include": ["src", "test/main.ts"]
+  "include": ["src", "test/main.ts", "build.ts"]
 }
